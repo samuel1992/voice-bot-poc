@@ -36,20 +36,39 @@ type DeepSeekClient struct {
 }
 
 func NewDeepSeekClient(apiKey, apiURL, model string) *DeepSeekClient {
-	systemPrompt := `You are a phone assistant for Vili Tecnologia. Vili Tecnologia provides a voip pbx and the price of the product
-is 42 reais per extension and they require a minimum of 10 extensions per contract. They offer IVR, Automatic Dialers, Extensions, call reports, billing, realtime voice integrations.
-Your job is to:
-1. Analyze incoming transcription to determine if the caller has finished speaking
-2. If still speaking: respond with exactly "LISTENING"
-3. If finished: provide a helpful, natural Portuguese response
+	systemPrompt := `Você é um assistente telefônico da Vili Tecnologia.
 
-Context: You receive progressive transcription updates. The caller may pause mid-sentence.
-Look for:
-- Complete questions (ending with ?)
-- Natural sentence endings
-- Pauses after complete thoughts
+## Sobre a Vili Tecnologia
+- Fornece PABX VoIP
+- Preço: R$ 42 por ramal
+- Mínimo de 10 ramais por contrato
+- Recursos: URA, Discadores Automáticos, Ramais, Relatórios de chamadas, Faturamento, Integrações de voz em tempo real
 
-Be conversational and friendly in Portuguese.`
+## Sua Função
+Analisar a transcrição recebida e determinar a intenção do usuário.
+
+## Tipos de Resposta
+1. **Despedida**: Se o usuário está se despedindo (tchau, obrigado e tchau, até logo, valeu, adeus)
+   - Responda com uma despedida amigável
+   - Exemplo: "De nada! Foi um prazer atendê-lo. Até logo!"
+   - Exemplo: "Obrigado pelo contato! Tenha um ótimo dia!"
+
+2. **Ainda falando**: Se o usuário ainda está no meio da frase
+   - Responda com exatamente "LISTENING"
+
+3. **Pergunta completa**: Se o usuário terminou de falar
+   - Forneça uma resposta útil e natural em português
+
+## Contexto
+Você recebe atualizações progressivas da transcrição. O usuário pode pausar no meio da frase.
+
+## Indicadores de Fala Completa
+- Perguntas completas (terminando com ?)
+- Finais de frases naturais
+- Pausas após pensamentos completos
+- Palavras de despedida indicando fim da conversa
+
+Seja conversacional e amigável em português.`
 
 	return &DeepSeekClient{
 		apiKey:       apiKey,
@@ -61,21 +80,15 @@ Be conversational and friendly in Portuguese.`
 }
 
 func (dc *DeepSeekClient) AnalyzeTranscript(transcript string, chatHistory []ChatMessage) (bool, string, error) {
-	// Build messages array: system + chat history + current transcript
 	messages := []ChatMessage{
 		{Role: "system", Content: dc.systemPrompt},
 	}
-
-	// Add chat history
 	messages = append(messages, chatHistory...)
-
-	// Add current transcript as user message
 	messages = append(messages, ChatMessage{
 		Role:    "user",
 		Content: transcript,
 	})
 
-	// Create request
 	reqBody := DeepSeekRequest{
 		Model:    dc.model,
 		Messages: messages,
@@ -87,7 +100,6 @@ func (dc *DeepSeekClient) AnalyzeTranscript(transcript string, chatHistory []Cha
 		return false, "", fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// Send POST request
 	req, err := http.NewRequest("POST", dc.apiURL, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return false, "", fmt.Errorf("failed to create request: %w", err)
@@ -107,7 +119,6 @@ func (dc *DeepSeekClient) AnalyzeTranscript(transcript string, chatHistory []Cha
 		return false, "", fmt.Errorf("DeepSeek API error: %d - %s", resp.StatusCode, string(body))
 	}
 
-	// Parse response
 	var deepseekResp DeepSeekResponse
 	if err := json.NewDecoder(resp.Body).Decode(&deepseekResp); err != nil {
 		return false, "", fmt.Errorf("failed to decode response: %w", err)
@@ -119,13 +130,11 @@ func (dc *DeepSeekClient) AnalyzeTranscript(transcript string, chatHistory []Cha
 
 	responseText := strings.TrimSpace(deepseekResp.Choices[0].Message.Content)
 
-	// Check if still listening
 	if responseText == "LISTENING" {
 		log.Println("[DEEPSEEK] Still listening...")
 		return false, "", nil
 	}
 
-	// User is done, return the response
 	log.Printf("[DEEPSEEK] User finished. Reply: %s", responseText)
 	return true, responseText, nil
 }

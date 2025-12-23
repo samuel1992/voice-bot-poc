@@ -12,7 +12,7 @@ type WsClient struct {
 	port      string
 	companyID string
 	extension string
-	conn      *websocket.Conn
+	Conn      *websocket.Conn
 	done      chan struct{}
 
 	textMsgs   chan string
@@ -36,7 +36,7 @@ func (ws *WsClient) Connect() {
 	log.Printf("Connecting to %s...", url)
 
 	var err error
-	ws.conn, _, err = websocket.DefaultDialer.Dial(url, nil)
+	ws.Conn, _, err = websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
 		log.Fatalf("Failed to connect: %v", err)
 	}
@@ -45,12 +45,12 @@ func (ws *WsClient) Connect() {
 }
 
 func (ws *WsClient) Stop() {
-	if ws.conn != nil {
-		err := ws.conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+	if ws.Conn != nil {
+		err := ws.Conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 		if err != nil {
 			log.Printf("Error sending close message: %v", err)
 		}
-		ws.conn.Close()
+		ws.Conn.Close()
 	}
 }
 
@@ -59,7 +59,7 @@ func (ws *WsClient) Start() {
 		defer close(ws.done)
 
 		for {
-			messageType, message, err := ws.conn.ReadMessage()
+			messageType, message, err := ws.Conn.ReadMessage()
 			if err != nil {
 				log.Printf("Read error: %v", err)
 				return

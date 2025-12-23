@@ -7,6 +7,8 @@ import (
 	"os/signal"
 	"sync"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 type Event struct {
@@ -31,12 +33,17 @@ func main() {
 	deepseekAPIKey := getEnv("DEEPSEEK_API_KEY", "")
 	deepseekAPIURL := getEnv("DEEPSEEK_API_URL", "https://api.deepseek.com/v1/chat/completions")
 	deepseekModel := getEnv("DEEPSEEK_MODEL", "deepseek-chat")
+	elevenlabsAPIKey := getEnv("ELEVENLABS_API_KEY", "")
+	elevenlabsVoiceID := getEnv("ELEVENLABS_VOICE_ID", "pNInz6obpgDQGcFmaJgB")
 
 	if fireworksAPIKey == "" {
 		log.Fatal("FIREWORKS_API_KEY environment variable is required")
 	}
 	if deepseekAPIKey == "" {
 		log.Fatal("DEEPSEEK_API_KEY environment variable is required")
+	}
+	if elevenlabsAPIKey == "" {
+		log.Fatal("ELEVENLABS_API_KEY environment variable is required")
 	}
 
 	// Initialize clients
@@ -51,6 +58,12 @@ func main() {
 	defer fireworksClient.Stop()
 
 	deepseekClient := NewDeepSeekClient(deepseekAPIKey, deepseekAPIURL, deepseekModel)
+
+	elevenlabsClient := NewElevenLabsClient(elevenlabsAPIKey, elevenlabsVoiceID)
+	if err := elevenlabsClient.Connect(); err != nil {
+		log.Fatalf("Failed to connect to ElevenLabs: %v", err)
+	}
+	defer elevenlabsClient.Stop()
 
 	// Chat history for maintaining conversation context
 	var chatHistory []ChatMessage
@@ -85,6 +98,23 @@ func main() {
 			case "callstart":
 				metadataJSON, _ := json.Marshal(event.Metadata)
 				log.Printf("Call started - metadata: %s", metadataJSON)
+
+				// Greet the caller
+				greeting := "Olá! Bem-vindo à Vili Tecnologia. Como posso ajudá-lo?"
+				log.Printf("[GREETING] %s", greeting)
+
+				// Add to chat history
+				processingMutex.Lock()
+				chatHistory = append(chatHistory, ChatMessage{
+					Role:    "assistant",
+					Content: greeting,
+				})
+				processingMutex.Unlock()
+
+				// Send greeting via TTS
+				if err := elevenlabsClient.SynthesizeText(greeting); err != nil {
+					log.Printf("Failed to synthesize greeting: %v", err)
+				}
 			case "callend":
 				log.Println("Call ended")
 			default:
@@ -158,8 +188,10 @@ func main() {
 					isProcessing = false
 					processingMutex.Unlock()
 
-					// TODO: Convert response to audio (TTS)
-					// TODO: Send audio back via wsClient.conn.WriteMessage()
+					// Synthesize response to audio
+					if err := elevenlabsClient.SynthesizeText(response); err != nil {
+						log.Printf("Failed to synthesize response: %v", err)
+					}
 				} else {
 					// Still listening, mark as processed and clear processing flag
 					processingMutex.Lock()
@@ -170,6 +202,12 @@ func main() {
 			})
 
 			processingMutex.Unlock()
+
+		case audioFrame := <-elevenlabsClient.AudioFrames:
+			// Send audio back to caller via virtual extension WebSocket
+			if err := wsClient.Conn.WriteMessage(websocket.BinaryMessage, audioFrame); err != nil {
+				log.Printf("Error sending audio to caller: %v", err)
+			}
 
 		case <-wsClient.done:
 			log.Println("WebSocket connection closed")
