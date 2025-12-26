@@ -20,8 +20,6 @@ func getEnv(key, defaultValue string) string {
 }
 
 func processInDeepSeek(deepseekClient *DeepSeekClient, messageText string) {
-	log.Println("[INFO] Detected silence. Processing with DeepSeek...")
-
 	finished, reply, err := deepseekClient.AnalyzeTranscript(messageText)
 	if err != nil {
 		log.Printf("[ERROR] DeepSeek error: %v", err)
@@ -113,20 +111,19 @@ func main() {
 				log.Printf("Error sending audio to Fireworks: %v", err)
 			}
 
-			if conversation.IsSilent() {
-				currentMsg := conversation.CurrentMessage()
-				if currentMsg != nil && currentMsg.Text() != "" {
-					go processInDeepSeek(deepseekClient, currentMsg.Text())
-					conversation.MarkCurrentMessageProcessed()
-				}
+			if conversation.IsSilent() && conversation.currentMessage.IsNew() {
+				go processInDeepSeek(deepseekClient, conversation.currentMessage.text)
+				conversation.MarkCurrentMessageProcessed()
+				log.Printf("[SILENCE-DETECTED] Processing '(%v) %s' with DeepSeek.\n",
+					conversation.currentMessage.ID,
+					conversation.currentMessage.text,
+				)
 			}
 
 		case transcript := <-fireworksClient.TranscriptChan:
-			if conversation.IsNew(transcript) {
-				conversation.Add(transcript)
-				if current := conversation.CurrentMessage(); current != nil && current.Text() != "" {
-					log.Printf("[TRANSCRIPT] %s", current.Text())
-				}
+			conversation.Add(&transcript)
+			if current := conversation.currentMessage; current != nil && current.IsNew() {
+				log.Printf("[TRANSCRIPT] (%v) - %s", current.ID, current.text)
 			}
 
 		case <-wsClient.done:
