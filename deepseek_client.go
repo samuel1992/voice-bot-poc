@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type ChatMessage struct {
@@ -36,7 +37,8 @@ type DeepSeekClient struct {
 }
 
 func NewDeepSeekClient(apiKey, apiURL, model string) *DeepSeekClient {
-	systemPrompt := `Você é um assistente telefônico da Vili Tecnologia.
+	systemPrompt := `Você é um assistente de voz, atendendo uma chamada telefonica da empresa Vili Tecnologia.
+Mantenha as respostas curtas a objetivas pois elas serão convertidas em voz, não use emojis ou caracteres de formatação de texto.
 
 ## Sobre a Vili Tecnologia
 - Fornece PABX VoIP
@@ -75,19 +77,17 @@ Seja conversacional e amigável em português.`
 		apiURL:       apiURL,
 		model:        model,
 		systemPrompt: systemPrompt,
-		httpClient:   &http.Client{},
+		httpClient: &http.Client{
+			Timeout: 30 * time.Second,
+		},
 	}
 }
 
-func (dc *DeepSeekClient) AnalyzeTranscript(transcript string, chatHistory []ChatMessage) (bool, string, error) {
+func (dc *DeepSeekClient) AnalyzeTranscript(transcript string) (bool, string, error) {
 	messages := []ChatMessage{
 		{Role: "system", Content: dc.systemPrompt},
+		{Role: "user", Content: transcript},
 	}
-	messages = append(messages, chatHistory...)
-	messages = append(messages, ChatMessage{
-		Role:    "user",
-		Content: transcript,
-	})
 
 	reqBody := DeepSeekRequest{
 		Model:    dc.model,
@@ -135,6 +135,5 @@ func (dc *DeepSeekClient) AnalyzeTranscript(transcript string, chatHistory []Cha
 		return false, "", nil
 	}
 
-	log.Printf("[DEEPSEEK] User finished. Reply: %s", responseText)
 	return true, responseText, nil
 }
