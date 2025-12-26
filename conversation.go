@@ -32,7 +32,7 @@ type Conversation struct {
 func NewConversation() *Conversation {
 	return &Conversation{
 		messages: []*Message{},
-		delta:    1.0,
+		delta:    0.5,
 	}
 }
 
