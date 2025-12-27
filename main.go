@@ -21,18 +21,6 @@ func getEnv(key, defaultValue string) string {
 	return defaultValue
 }
 
-func processInDeepSeek(deepseekClient *DeepSeekClient, messageText string) {
-	finished, reply, err := deepseekClient.AnalyzeTranscript(messageText)
-	if err != nil {
-		log.Printf("[ERROR] DeepSeek error: %v", err)
-		return
-	}
-
-	if finished && reply != "" {
-		log.Printf("[DEEPSEEK] %s", reply)
-	}
-}
-
 func main() {
 	// Load configuration
 	host := getEnv("EXTENSION_HOST", "localhost")
@@ -110,7 +98,7 @@ func main() {
 				log.Printf("Error sending audio to Fireworks: %v", err)
 			}
 
-			if conversation.IsSilent() && conversation.currentMessage.IsNew() {
+			if conversation.IsSilent() && conversation.currentMessage.IsNew() && !elevenLabsClient.onGoingConversation {
 				go func() {
 					finished, reply, err := deepseekClient.AnalyzeTranscript(conversation.currentMessage.text)
 					if err != nil {

@@ -46,15 +46,21 @@ func (c *Conversation) Add(msg *Message) {
 		return
 	}
 
+	// Same segment - update the text (normal updates during speech)
 	if c.currentMessage.ID == msg.ID {
 		c.currentMessage.text = msg.text
 		c.currentMessage.timestamp = msg.timestamp
 		return
 	}
 
-	c.currentMessage = msg
+	// Older segment - ignore (late updates from Fireworks)
+	if msg.ID < c.currentMessage.ID {
+		return
+	}
+
+	// Newer segment - save current to history, move to new
 	c.messages = append(c.messages, c.currentMessage)
-	c.currentMessage = nil
+	c.currentMessage = msg
 }
 
 func (c *Conversation) MarkCurrentMessageProcessed() {

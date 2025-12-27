@@ -14,11 +14,12 @@ import (
 )
 
 type ElevenLabsClient struct {
-	apiKey          string
-	voiceID         string
-	conn            *websocket.Conn
-	outputAudioChan chan []byte
-	done            chan struct{}
+	apiKey              string
+	voiceID             string
+	conn                *websocket.Conn
+	onGoingConversation bool
+	outputAudioChan     chan []byte
+	done                chan struct{}
 }
 
 type ElevenLabsResponse struct {
@@ -103,6 +104,8 @@ func (c *ElevenLabsClient) startOutputLoop() {
 					return
 				}
 
+				c.onGoingConversation = true
+
 				// Decode and buffer audio
 				if response.Audio != "" {
 					audioData, err := base64.StdEncoding.DecodeString(response.Audio)
@@ -124,6 +127,7 @@ func (c *ElevenLabsClient) startOutputLoop() {
 				}
 
 				if response.IsFinal {
+					c.onGoingConversation = false
 					log.Println("Received final audio chunk from ElevenLabs")
 					// Send any remaining partial frame (padded)
 					if frameBuffer.Len() > 0 {
